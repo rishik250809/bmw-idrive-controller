@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iDrive Controller GUI</title>
+<style>
+  :root { --bg:#14161a; --panel:#1e2127; --line:#2e333b; --fg:#e8eaed; --dim:#8b929c; --accent:#3d8bfd; --ok:#3ecf8e; --bad:#ff6b6b; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f2f3f5; --panel:#fff; --line:#d5d8dd; --fg:#1b1d21; --dim:#6b7280; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.4 -apple-system, system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+  header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0; flex:1; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .panel h2 { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); margin:0 0 10px; }
+  button { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px 14px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button:active { background:var(--accent); color:#fff; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .status { display:flex; align-items:center; gap:6px; color:var(--dim); font-size:13px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--bad); }
+  .dot.on { background:var(--ok); }
+  .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; }
+  .row { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+  @media (max-width:640px){ .row{grid-template-columns:1fr;} .grid{grid-template-columns:repeat(2,1fr);} }
+  .dpad { display:grid; grid-template-columns: repeat(3, 64px); grid-template-rows: repeat(3, 64px); gap:8px; justify-content:center; }
+  .dpad button { padding:0; font-size:20px; }
+  .scroll { display:flex; gap:8px; align-items:center; margin-top:12px; justify-content:center; flex-wrap:wrap; }
+  .scroll input { width:64px; }
+  input[type=text], input[type=number] { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:9px 10px; }
+  .raw { display:flex; gap:8px; }
+  .raw input { flex:1; font-family: ui-monospace, Menlo, monospace; }
+  #log { height:220px; overflow:auto; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px; font:12px/1.5 ui-monospace, Menlo, monospace; white-space:pre-wrap; }
+  .tx { color:var(--accent); } .err { color:var(--bad); }
+  .hint { color:var(--dim); font-size:12px; margin-top:8px; }
+  kbd { background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:0 5px; font-size:11px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>iDrive Controller</h1>
+    <span class="status"><span class="dot" id="dot"></span><span id="statusText">Not connected</span></span>
+    <button class="primary" id="connectBtn">Connect Arduino</button>
+  </header>
+
+  <div class="row">
+    <section class="panel">
+      <h2>Knob</h2>
+      <div class="dpad">
+        <span></span><button data-cmd="UP" title="↑">▲</button><span></span>
+        <button data-cmd="LEFT" title="←">◀</button><button data-cmd="PUSH" title="Enter">●</button><button data-cmd="RIGHT" title="→">▶</button>
+        <span></span><button data-cmd="DOWN" title="↓">▼</button><span></span>
+      </div>
+      <div class="scroll">
+        <button id="scrollUp" title="Page Up / mouse wheel up">⟲ Scroll up</button>
+        <input type="number" id="steps" value="1" min="1" max="100" aria-label="Scroll steps">
+        <button id="scrollDown" title="Page Down / mouse wheel down">Scroll down ⟳</button>
+      </div>
+      <div class="hint">Keys: <kbd>↑↓←→</kbd> <kbd>Enter</kbd> = push, <kbd>PgUp</kbd>/<kbd>PgDn</kbd> = rotate. Mouse wheel over the knob also rotates.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Buttons</h2>
+      <div class="grid">
+        <button data-cmd="BACK">BACK</button>
+        <button data-cmd="HOME">HOME</button>
+        <button data-cmd="COM">COM</button>
+        <button data-cmd="OPTION">OPTION</button>
+        <button data-cmd="MEDIA">MEDIA</button>
+        <button data-cmd="NAV">NAV</button>
+        <button data-cmd="MAP">MAP</button>
+        <button data-cmd="GLOBE">GLOBE</button>
+      </div>
+      <h2 style="margin-top:16px">Rotary position bytes</h2>
+      <div class="scroll" style="justify-content:flex-start;margin-top:0">
+        <input type="number" id="rotIdx" value="1" min="1" max="6" aria-label="Low byte index">
+        <button id="rotSet">Set ROTBYTES</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Raw frame</h2>
+    <div class="raw">
+      <input type="text" id="rawId" value="25B" style="max-width:80px" aria-label="CAN ID hex">
+      <input type="text" id="rawData" placeholder="16 hex chars, e.g. 03FF7F0000200000C0C0" aria-label="Data hex">
+      <button id="rawSend">SEND</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Log</h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let port = null, writer = null, reader = null, keepReading = false;
+
+function log(text, cls) {
+  const el = $('log');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = text;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setConnected(on) {
+  $('dot').classList.toggle('on', on);
+  $('statusText').textContent = on ? 'Connected' : 'Not connected';
+  $('connectBtn').textContent = on ? 'Disconnect' : 'Connect Arduino';
+  document.querySelectorAll('button[data-cmd], #scrollUp, #scrollDown, #rotSet, #rawSend')
+    .forEach(b => b.disabled = !on);
+}
+
+async function readLoop() {
+  const decoder = new TextDecoder();
+  let buf = '';
+  while (keepReading && port.readable) {
+    reader = port.readable.getReader();
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i).replace(/\r$/, '');
+          buf = buf.slice(i + 1);
+          if (line) log(line, /FAIL|ERR|Unknown|Bad/.test(line) ? 'err' : '');
+        }
+      }
+    } catch (e) { log('Read error: ' + e.message, 'err'); }
+    finally { reader.releaseLock(); }
+  }
+}
+
+async function connect() {
+  if (!('serial' in navigator)) { alert('Web Serial is not supported. Use Chrome or Edge.'); return; }
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    writer = port.writable.getWriter();
+    keepReading = true;
+    setConnected(true);
+    log('Connected. (Board may reset on connect; wait ~2 s before sending.)');
+    readLoop();
+  } catch (e) { log('Connect failed: ' + e.message, 'err'); port = null; }
+}
+
+async function disconnect() {
+  keepReading = false;
+  try { if (reader) await reader.cancel(); } catch {}
+  try { if (writer) { writer.releaseLock(); } } catch {}
+  try { if (port) await port.close(); } catch {}
+  port = writer = reader = null;
+  setConnected(false);
+  log('Disconnected.');
+}
+
+async function send(cmd) {
+  if (!writer) return;
+  log('> ' + cmd, 'tx');
+  await writer.write(new TextEncoder().encode(cmd + '\n'));
+}
+
+function steps() { return Math.max(1, Math.min(100, parseInt($('steps').value) || 1)); }
+const scroll = dir => send((dir > 0 ? 'SCROLLDOWN ' : 'SCROLLUP ') + steps());
+
+$('connectBtn').onclick = () => port ? disconnect() : connect();
+document.querySelectorAll('button[data-cmd]').forEach(b => b.onclick = () => send(b.dataset.cmd));
+$('scrollUp').onclick = () => scroll(-1);
+$('scrollDown').onclick = () => scroll(1);
+$('rotSet').onclick = () => send('ROTBYTES ' + (parseInt($('rotIdx').value) || 1));
+$('rawSend').onclick = () => {
+  const id = $('rawId').value.trim(), d = $('rawData').value.replace(/\s+/g, '');
+  if (id && d) send(`SEND ${id} ${d}`);
+};
+
+const keymap = { ArrowUp:'UP', ArrowDown:'DOWN', ArrowLeft:'LEFT', ArrowRight:'RIGHT', Enter:'PUSH' };
+document.addEventListener('keydown', e => {
+  if (!writer || e.target.matches('input, textarea')) return;
+  if (keymap[e.key]) { e.preventDefault(); send(keymap[e.key]); }
+  else if (e.key === 'PageDown') { e.preventDefault(); scroll(1); }
+  else if (e.key === 'PageUp')   { e.preventDefault(); scroll(-1); }
+});
+
+let wheelBusy = false;
+document.querySelector('.dpad').parentElement.addEventListener('wheel', e => {
+  if (!writer) return;
+  e.preventDefault();
+  if (wheelBusy) return;
+  wheelBusy = true; setTimeout(() => wheelBusy = false, 120);
+  send((e.deltaY > 0 ? 'SCROLLDOWN ' : 'SCROLLUP ') + 1);
+}, { passive: false });
+
+setConnected(false);
+</script>
+</body>
+</html>
